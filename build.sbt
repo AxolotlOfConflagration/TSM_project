@@ -8,7 +8,8 @@ val sparkVersion = "2.4.1"
 libraryDependencies ++= Seq(
   "org.apache.spark" %% "spark-core" % sparkVersion,
   "com.crealytics" %% "spark-excel" % "0.8.2",
-  "org.apache.spark" %% "spark-sql" % sparkVersion
+  "org.apache.spark" %% "spark-sql" % sparkVersion,
+  "org.apache.spark" %% "spark-mllib" % sparkVersion
 )
 
 val projectMainClass = "Main"

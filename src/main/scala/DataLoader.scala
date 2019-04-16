@@ -1,8 +1,9 @@
-import org.apache.spark.sql.{DataFrame, SQLContext, SparkSession}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 
-case class DataLoader (path: String = "/home/sleter/Documents/Github/TSM_project/data/dane_paragony.xlsx")
-{
-  def readXslx(ctx: SparkSession): DataFrame = ctx
+object DataLoader {
+  val DEFAULT_PATH: String = "data/dane_paragony.xlsx"
+
+  def readXslx(path: String = DEFAULT_PATH)(implicit ctx: SparkSession): DataFrame = ctx
     .read
     .format("com.crealytics.spark.excel")
     .option("location", path)
@@ -12,7 +13,7 @@ case class DataLoader (path: String = "/home/sleter/Documents/Github/TSM_project
     .option("addColorColumns", "False")
     .load()
 
-  def readCsv(ctx: SparkSession): DataFrame = ctx
+  def readCsv(path: String = DEFAULT_PATH)(implicit ctx: SparkSession): DataFrame = ctx
     .read
     .format("csv")
     .option("location", path)
