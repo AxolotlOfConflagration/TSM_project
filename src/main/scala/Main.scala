@@ -1,10 +1,10 @@
 import org.apache.spark.ml.evaluation.RegressionEvaluator
 import org.apache.spark.ml.recommendation.ALS
-import org.apache.spark.sql.SparkSession
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 
 object Main {
-  def main(args: Array[String]): Unit = {
+  def recommendation(): Unit ={
     val verbose = true
 
     implicit val spark: SparkSession = SparkSession
@@ -68,5 +68,99 @@ object Main {
     shopRecs.show()
     println("We recommend for warehouses to send items for those shops:")
     itemRecs.show()
+  }
+
+
+
+  def top10PopularProduct() :DataFrame={
+    implicit val session: SparkSession = SparkSession
+      .builder()
+      .master("local")
+      .appName("TSM_project")
+      .getOrCreate()
+    session.sparkContext.setLogLevel("OFF")
+
+    val recipts = DataLoader.readCsv()
+
+    val category = DataLoader.readCsv("data/dane_kategoryzacja.csv")
+    import session.sqlContext.implicits._
+
+    recipts
+      .join(category, "Produkt ID")
+      .drop("Hierarchia Grupa 0 opis,Hierarchia Grupa 1 opis,Hierarchia Grupa 2 opis".split(",") : _*)
+      //      .filter(_.getAs[String]("Sklep") == "Sklep13")
+      .map(row => row.getAs[String]("Produkt ID") -> 1)
+      .groupByKey(_._1)
+      .reduceGroups((x, y) => (x._1, x._2 + y._2))
+      .map(row => row._1 -> row._2._2)
+      .orderBy(desc("_2"))
+      .withColumnRenamed("_1" ,  "Produkt ID")
+      .withColumnRenamed("_2" ,  "Ilosc")
+      .join(category, "Produkt ID")
+      .drop("Hierarchia Grupa 0 opis,Hierarchia Grupa 1 opis,Hierarchia Grupa 2 opis".split(",") : _*)
+      .limit(10)
+
+  }
+
+  def getBusiestHourOfDay(): DataFrame={
+    implicit val session: SparkSession = SparkSession
+      .builder()
+      .master("local")
+      .appName("TSM_project")
+      .getOrCreate()
+    session.sparkContext.setLogLevel("OFF")
+
+    val recipts = DataLoader.readCsv()//.na.drop()
+
+
+    import session.sqlContext.implicits._
+    recipts
+      .withColumn("Godzina", split(col("Paragon godzina"), ":").getItem(0))
+      .map(row => row.getAs[String]("Godzina") -> 1)
+      .groupByKey(_._1)
+      .reduceGroups((x, y) => (x._1, x._2 + y._2))
+      .map(row => row._1 -> row._2._2)
+      .orderBy(desc("_2"))
+      .withColumnRenamed("_1" ,  "Godzina")
+      .withColumnRenamed("_2" ,  "Ilosc")
+
+
+  }
+  def top3PopularCateogryProduct() : DataFrame= {
+    implicit val session: SparkSession = SparkSession
+      .builder()
+      .master("local")
+      .appName("TSM_project")
+      .getOrCreate()
+    session.sparkContext.setLogLevel("OFF")
+
+    val recipts = DataLoader.readCsv()
+
+    val category = DataLoader.readCsv("data/dane_kategoryzacja.csv")
+    import session.sqlContext.implicits._
+    val result = recipts
+      .join(category, "Produkt ID")
+      .map(row => row.getAs[String]("Produkt ID") -> 1)
+      .groupByKey(_._1)
+      .reduceGroups((x, y) => (x._1, x._2 + y._2))
+      .map(row => row._1 -> row._2._2)
+      .orderBy(desc("_2"))
+      .withColumnRenamed("_1", "Produkt ID")
+      .withColumnRenamed("_2", "Ilosc")
+      .join(category, "Produkt ID")
+      .drop("Hierarchia Grupa 1 opis")
+      .drop("Hierarchia Grupa 2 opis")
+      .drop("Hierarchia Grupa 3 opis")
+      .drop("Produkt ID")
+      .withColumnRenamed("Hierarchia Grupa 0 opis", "Kategoria")
+      .orderBy(desc("Ilosc"))
+      .limit(10)
+    val top3 = result.select("Kategoria").distinct()
+    //result.show()
+    top3.limit(3)
+
+  }
+  def main(args: Array[String]): Unit = {
+    top3PopularCateogryProduct().show()
   }
 }
