@@ -1,6 +1,8 @@
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
 object DataSink {
+  val DEFAULT_PATH: String = "output_data/"
+
   def writeCassandra(df: DataFrame)(): Unit = df
     .write
     .format("org.apache.spark.sql.cassandra")
@@ -8,4 +10,12 @@ object DataSink {
     .option("confirm.truncate", true)
     .options(Map( "table" -> "rec", "keyspace" -> "tsm_keyspace"))
     .save()
+
+  def writeCsv(df: DataFrame, fileName: String)(): Unit = df
+    .repartition(1)
+    .write
+    .format("com.databricks.spark.csv")
+    .mode("overwrite")
+    .option("header", "true")
+    .save(DEFAULT_PATH+fileName+".csv")
 }
