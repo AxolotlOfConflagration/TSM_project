@@ -5,3 +5,4 @@ sudo docker cp queries.cql main_cass:/queries.cql
 sudo docker exec -it main_cass cqlsh
 SOURCE 'queries.cql'
 ```
+[Setup Redash](https://computingforgeeks.com/how-to-install-redash-data-visualization-dashboard-on-ubuntu-18-04-lts/)
