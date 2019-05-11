@@ -4,8 +4,8 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 
 object Main {
-  def recommendation(): Unit ={
-    val verbose = true
+  def main(args: Array[String]): Unit = {
+    val verbose = false
 
     implicit val spark: SparkSession = SparkSession
       .builder()
@@ -13,7 +13,18 @@ object Main {
       .appName("TSM_project")
       .getOrCreate()
     spark.sparkContext.setLogLevel("OFF")
+
     import spark.implicits._
+
+//    CASSANDRA TEST ------------------------------
+//    val output_data = spark.range(0, 3).select($"id".as("user_id"), (rand() * 40 + 20).as("ratings"))
+//    output_data.show()
+//
+//    DataSink.writeCassandra(output_data)
+//
+//    val input_data = DataLoader.readCassandra()
+//    input_data.show()
+//    ----------------------------------------------
 
     val data = DataLoader.readXslx()
 
@@ -68,6 +79,8 @@ object Main {
     shopRecs.show()
     println("We recommend for warehouses to send items for those shops:")
     itemRecs.show()
+
+//    DataSink.writeCsv(ratings, "ratings")
   }
 
 

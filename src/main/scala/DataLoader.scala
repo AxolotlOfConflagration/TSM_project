@@ -1,4 +1,6 @@
 import org.apache.spark.sql.{DataFrame, SparkSession}
+import com.datastax.spark.connector._
+import org.apache.spark.sql.cassandra._
 
 object DataLoader {
   val DEFAULT_PATH: String = "data/dane_paragony."
@@ -16,6 +18,13 @@ object DataLoader {
   def readCsv(path: String = DEFAULT_PATH+"csv")(implicit ctx: SparkSession): DataFrame = ctx
     .read
     .format("csv")
+    .option("location", path)
     .option("header", "true")
-    .load(path)
+    .load()
+
+  def readCassandra()(implicit ctx: SparkSession): DataFrame = ctx
+    .read
+    .format("org.apache.spark.sql.cassandra")
+    .options(Map( "table" -> "rec", "keyspace" -> "tsm_keyspace"))
+    .load
 }
