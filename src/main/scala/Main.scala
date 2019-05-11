@@ -86,7 +86,7 @@ object Main {
     top10PopularProduct(spark).show(10)
     getBusiestHourOfDay(spark).show(10)
     top3PopularCategoryProduct(spark).show(10)
-    marketBasketAnalysis(spark).show()
+    marketBasketAnalysis(spark).show(10)
 
   }
 
@@ -100,7 +100,7 @@ object Main {
     println (listOfProduct)
     receipts
       .groupBy("Paragon numer")
-      .reduceGroups()
+      .agg(collect_list($"Produkt ID"))
 
 
 
