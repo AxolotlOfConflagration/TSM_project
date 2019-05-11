@@ -16,15 +16,15 @@ object Main {
 
     import spark.implicits._
 
-//    CASSANDRA TEST ------------------------------
-//    val output_data = spark.range(0, 3).select($"id".as("user_id"), (rand() * 40 + 20).as("ratings"))
-//    output_data.show()
-//
-//    DataSink.writeCassandra(output_data)
-//
-//    val input_data = DataLoader.readCassandra()
-//    input_data.show()
-//    ----------------------------------------------
+    //    CASSANDRA TEST ------------------------------
+    //    val output_data = spark.range(0, 3).select($"id".as("user_id"), (rand() * 40 + 20).as("ratings"))
+    //    output_data.show()
+    //
+    //    DataSink.writeCassandra(output_data)
+    //
+    //    val input_data = DataLoader.readCassandra()
+    //    input_data.show()
+    //    ----------------------------------------------
 
     val data = DataLoader.readXslx()
 
@@ -80,25 +80,26 @@ object Main {
     println("We recommend for warehouses to send items for those shops:")
     itemRecs.show()
 
-//    DataSink.writeCsv(ratings, "ratings")
+    //    DataSink.writeCsv(ratings, "ratings")
+
+
+    top10PopularProduct(spark).show(10)
+    getBusiestHourOfDay(spark).show(10)
+    top3PopularCategoryProduct(spark).show(10)
+
   }
 
 
 
-  def top10PopularProduct() :DataFrame={
-    implicit val session: SparkSession = SparkSession
-      .builder()
-      .master("local")
-      .appName("TSM_project")
-      .getOrCreate()
-    session.sparkContext.setLogLevel("OFF")
+  def top10PopularProduct(session: SparkSession) :DataFrame={
 
-    val recipts = DataLoader.readCsv()
+    val receipts = DataLoader.readCsv()(session)
 
-    val category = DataLoader.readCsv("data/dane_kategoryzacja.csv")
+    val category = DataLoader.readCsv("data/dane_kategoryzacja.csv")(session)
+
     import session.sqlContext.implicits._
 
-    recipts
+    receipts
       .join(category, "Produkt ID")
       .drop("Hierarchia Grupa 0 opis,Hierarchia Grupa 1 opis,Hierarchia Grupa 2 opis".split(",") : _*)
       //      .filter(_.getAs[String]("Sklep") == "Sklep13")
@@ -112,22 +113,15 @@ object Main {
       .join(category, "Produkt ID")
       .drop("Hierarchia Grupa 0 opis,Hierarchia Grupa 1 opis,Hierarchia Grupa 2 opis".split(",") : _*)
       .limit(10)
-
   }
 
-  def getBusiestHourOfDay(): DataFrame={
-    implicit val session: SparkSession = SparkSession
-      .builder()
-      .master("local")
-      .appName("TSM_project")
-      .getOrCreate()
-    session.sparkContext.setLogLevel("OFF")
+  def getBusiestHourOfDay(session: SparkSession): DataFrame={
 
-    val recipts = DataLoader.readCsv()//.na.drop()
-
+    val receipts = DataLoader.readCsv()(session)//.na.drop()
 
     import session.sqlContext.implicits._
-    recipts
+
+    receipts
       .withColumn("Godzina", split(col("Paragon godzina"), ":").getItem(0))
       .map(row => row.getAs[String]("Godzina") -> 1)
       .groupByKey(_._1)
@@ -136,22 +130,17 @@ object Main {
       .orderBy(desc("_2"))
       .withColumnRenamed("_1" ,  "Godzina")
       .withColumnRenamed("_2" ,  "Ilosc")
-
-
   }
-  def top3PopularCateogryProduct() : DataFrame= {
-    implicit val session: SparkSession = SparkSession
-      .builder()
-      .master("local")
-      .appName("TSM_project")
-      .getOrCreate()
-    session.sparkContext.setLogLevel("OFF")
 
-    val recipts = DataLoader.readCsv()
+  def top3PopularCategoryProduct(session: SparkSession) : DataFrame= {
 
-    val category = DataLoader.readCsv("data/dane_kategoryzacja.csv")
+    val receipts = DataLoader.readCsv()(session)
+
+    val category = DataLoader.readCsv("data/dane_kategoryzacja.csv")(session)
+
     import session.sqlContext.implicits._
-    val result = recipts
+
+    val result = receipts
       .join(category, "Produkt ID")
       .map(row => row.getAs[String]("Produkt ID") -> 1)
       .groupByKey(_._1)
@@ -171,9 +160,5 @@ object Main {
     val top3 = result.select("Kategoria").distinct()
     //result.show()
     top3.limit(3)
-
-  }
-  def main(args: Array[String]): Unit = {
-    top3PopularCateogryProduct().show()
   }
 }
