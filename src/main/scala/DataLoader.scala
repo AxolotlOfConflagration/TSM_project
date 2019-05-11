@@ -18,9 +18,8 @@ object DataLoader {
   def readCsv(path: String = DEFAULT_PATH+"csv")(implicit ctx: SparkSession): DataFrame = ctx
     .read
     .format("csv")
-    .option("location", path)
     .option("header", "true")
-    .load()
+    .load(path)
 
   def readCassandra()(implicit ctx: SparkSession): DataFrame = ctx
     .read
