@@ -173,7 +173,4 @@ object Main {
     top3.limit(3)
 
   }
-  def main(args: Array[String]): Unit = {
-    top3PopularCateogryProduct().show()
-  }
 }
