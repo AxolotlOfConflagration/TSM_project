@@ -1,7 +1,11 @@
+import breeze.linalg.unique
 import org.apache.spark.ml.evaluation.RegressionEvaluator
 import org.apache.spark.ml.recommendation.ALS
-import org.apache.spark.sql.{DataFrame, SparkSession, Row}
+import org.apache.spark.sql.{DataFrame, Row, SparkSession}
 import org.apache.spark.sql.functions._
+import org.apache.spark.ml.fpm.FPGrowth
+
+import scala.collection.mutable
 
 object Main {
   def main(args: Array[String]): Unit = {
@@ -16,94 +20,107 @@ object Main {
 
     import spark.implicits._
 
-//        CASSANDRA TEST ------------------------------
-//        val output_data = spark.range(0, 3).select($"id".as("user_id"), (rand() * 40 + 20).as("ratings"))
-//        output_data.show()
+    //        CASSANDRA TEST ------------------------------
+    //        val output_data = spark.range(0, 3).select($"id".as("user_id"), (rand() * 40 + 20).as("ratings"))
+    //        output_data.show()
+    //
+    //        DataSink.writeCassandra(output_data)
+    //
+    //        val input_data = DataLoader.readCassandra()
+    //        input_data.show()
+    //        ----------------------------------------------
+
+//    val data = DataLoader.readXslx()
 //
-//        DataSink.writeCassandra(output_data)
+//    val storeItemCount = data
+//      .groupBy($"Sklep", $"Produkt ID")
+//      .count()
+//      .na.drop()
+//      .orderBy(desc("count"))
 //
-//        val input_data = DataLoader.readCassandra()
-//        input_data.show()
-//        ----------------------------------------------
-
-    val data = DataLoader.readXslx()
-
-    val storeItemCount = data
-      .groupBy($"Sklep", $"Produkt ID")
-      .count()
-      .na.drop()
-      .orderBy(desc("count"))
-
-    if(verbose) storeItemCount.show()
-
-    val storeTotalItemsSold =
-      storeItemCount
-        .groupBy($"Sklep")
-        .sum("count")
-
-    if(verbose) storeTotalItemsSold.show()
-
-    val ratings = storeItemCount
-      .join(storeTotalItemsSold, "Sklep")
-      .select(
-        regexp_extract($"Sklep", """(\d+)""", 1) cast "int" as "Sklep",
-        $"Produkt ID",
-        $"count" / $"sum(count)" as "rating")
-      .orderBy(desc("rating"))
-
-    if(verbose) ratings.show()
-
-    val Array(traning, test) = ratings.randomSplit(Array(0.85, 0.15), 42)
-
-    val als = new ALS()
-      .setMaxIter(5)
-      .setRegParam(0.01)
-      .setUserCol("Sklep")
-      .setItemCol("Produkt ID")
-      .setRatingCol("rating")
-    val model = als.fit(traning)
-    model.setColdStartStrategy("drop")
-
-    val predictions = model.transform(test)
-    val evaluator = new RegressionEvaluator()
-      .setMetricName("rmse")
-      .setLabelCol("rating")
-      .setPredictionCol("prediction")
-    val rmse = evaluator.evaluate(predictions)
-    println(s"Root-mean-square error = $rmse")
-
-    val shopRecs = model.recommendForAllUsers(10)
-    val itemRecs = model.recommendForAllItems(10)
-
-    println("We recommend for shops to stock up on these items:")
-    //shopRecs.show()
-    println("We recommend for warehouses to send items for those shops:")
-    itemRecs.show()
-
-        DataSink.writeCsv(ratings, "ratings")
-
-
-    top10PopularProduct(spark).show(10)
-    getBusiestHourOfDay(spark).show(10)
-    top3PopularCategoryProduct(spark).show(10)
-    marketBasketAnalysis(spark).show()
+//    if(verbose) storeItemCount.show()
+//
+//    val storeTotalItemsSold =
+//      storeItemCount
+//        .groupBy($"Sklep")
+//        .sum("count")
+//
+//    if(verbose) storeTotalItemsSold.show()
+//
+//    val ratings = storeItemCount
+//      .join(storeTotalItemsSold, "Sklep")
+//      .select(
+//        regexp_extract($"Sklep", """(\d+)""", 1) cast "int" as "Sklep",
+//        $"Produkt ID",
+//        $"count" / $"sum(count)" as "rating")
+//      .orderBy(desc("rating"))
+//
+//    if(verbose) ratings.show()
+//
+//    val Array(traning, test) = ratings.randomSplit(Array(0.85, 0.15), 42)
+//
+//    val als = new ALS()
+//      .setMaxIter(5)
+//      .setRegParam(0.01)
+//      .setUserCol("Sklep")
+//      .setItemCol("Produkt ID")
+//      .setRatingCol("rating")
+//    val model = als.fit(traning)
+//    model.setColdStartStrategy("drop")
+//
+//    val predictions = model.transform(test)
+//    val evaluator = new RegressionEvaluator()
+//      .setMetricName("rmse")
+//      .setLabelCol("rating")
+//      .setPredictionCol("prediction")
+//    val rmse = evaluator.evaluate(predictions)
+//    println(s"Root-mean-square error = $rmse")
+//
+//    val shopRecs = model.recommendForAllUsers(10)
+//    val itemRecs = model.recommendForAllItems(10)
+//
+//    println("We recommend for shops to stock up on these items:")
+//    //shopRecs.show()
+//    println("We recommend for warehouses to send items for those shops:")
+//    itemRecs.show()
+//
+//    DataSink.writeCsv(ratings, "ratings")
+//
+//
+//    top10PopularProduct(spark).show(10)
+//    getBusiestHourOfDay(spark).show(10)
+//    top3PopularCategoryProduct(spark).show(10)
+    marketBasketAnalysis(spark)
 
   }
+
 
 
   def marketBasketAnalysis(session: SparkSession) ={
     import session.sqlContext.implicits._
     val receipts = DataLoader.readCsv()(session)
-    val receipts1 = DataLoader.readCsv()(session)
-    //receipts.groupBy("Paragon numer").count()
-    val listOfProduct = receipts.filter(receipts("Paragon numer") === 68285).select("Produkt ID").collectAsList()
-    println (listOfProduct)
-    receipts
+    val category = DataLoader.readCsv("data/dane_kategoryzacja.csv")(session)
+
+    val removeDuplicates: mutable.WrappedArray[String] => mutable.WrappedArray[String] = _.distinct
+    val uniqueProduct = udf(removeDuplicates)
+
+    val basketItems = receipts
+      .join(category, "Produkt ID")
+      .drop("Sklep, Paragon godzina, Promocja A, Promocja B, Wartość netto sprzedaży z paragonu, Rok i miesiac, Hierarchia Grupa 0 opis, Hierarchia Grupa 1 opis, Hierarchia Grupa 2 opis".split(", ") : _*)
+
       .groupBy("Paragon numer")
-      .reduceGroups()
+      .agg(collect_list($"Hierarchia Grupa 3 opis"))
+      .withColumn("collect_list(Hierarchia Grupa 3 opis)" , uniqueProduct($"collect_list(Hierarchia Grupa 3 opis)"))
+      .withColumnRenamed("collect_list(Hierarchia Grupa 3 opis)" ,  "Items")
 
+    val fpgrowth = new FPGrowth().setItemsCol("Items").setMinSupport(0.001).setMinConfidence(0)
+    val model = fpgrowth.fit(basketItems)
 
+    val mostPopularItemInABasket = model.freqItemsets
+    mostPopularItemInABasket.orderBy(desc("freq")).show(false)
 
+    val ifThen = model.associationRules
+    ifThen.orderBy(desc("confidence")).show(false)
 
   }
 
