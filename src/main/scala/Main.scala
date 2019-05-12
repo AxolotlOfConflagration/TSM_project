@@ -115,7 +115,7 @@ object Main {
       .withColumn("collect_list(Hierarchia Grupa 3 opis)" , uniqueProduct($"collect_list(Hierarchia Grupa 3 opis)"))
       .withColumnRenamed("collect_list(Hierarchia Grupa 3 opis)" ,  "Items")
 
-      .agg(collect_list($"Produkt ID"))
+
 
 
     val fpgrowth = new FPGrowth().setItemsCol("Items").setMinSupport(0.001).setMinConfidence(0)
