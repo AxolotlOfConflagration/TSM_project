@@ -19,16 +19,16 @@ object Main {
     spark.sparkContext.setLogLevel("OFF")
 
     import spark.implicits._
-
-    //        CASSANDRA TEST ------------------------------
-    //        val output_data = spark.range(0, 3).select($"id".as("user_id"), (rand() * 40 + 20).as("ratings"))
-    //        output_data.show()
-    //
-    //        DataSink.writeCassandra(output_data)
-    //
-    //        val input_data = DataLoader.readCassandra()
-    //        input_data.show()
-    //        ----------------------------------------------
+//
+//            CASSANDRA TEST ------------------------------
+//            val output_data = spark.range(0, 3).select($"id".as("user_id"), (rand() * 40 + 20).as("ratings"))
+//            output_data.show()
+//
+//            DataSink.writeCassandra(output_data)
+//
+//            val input_data = DataLoader.readCassandra()
+//            input_data.show()
+//            ----------------------------------------------
 
 
 
@@ -88,13 +88,30 @@ object Main {
 
         DataSink.writeCsv(ratings, "ratings")
 
-
-    top10PopularProduct(spark).show(10)
+    println("Top 10 Popular Product")
+    top10PopularProduct(spark).show()
+    println("Busiest Hour of Day")
     getBusiestHourOfDay(spark).show(10)
-    top3PopularCategoryProduct(spark).show(10)
-    marketBasketAnalysis(spark).show(false)
+    println("Top 3 Popular Categpry Product")
+    top3PopularCategoryProduct(spark).show()
+
+    val ( mostPopularItemInABasket, ifThen) = marketBasketAnalysis(spark)
+    println("Most Popular Item In a Basket")
+    mostPopularItemInABasket.show()
+    println("MBA - If -> Then ")
+    ifThen.show()
 
 
+    DataSink.writeCassandra(top10PopularProduct(spark), "top10products")
+    DataSink.writeCsv(top10PopularProduct(spark), "top10products")
+    DataSink.writeCassandra(getBusiestHourOfDay(spark), "busiesthourofday")
+    DataSink.writeCsv(getBusiestHourOfDay(spark), "busiesthourofday")
+    DataSink.writeCassandra(top3PopularCategoryProduct(spark), "top3popularcategoryproduct")
+    DataSink.writeCsv(top3PopularCategoryProduct(spark), "top3popularcategoryproduct")
+    DataSink.writeCassandra(mostPopularItemInABasket, "mostpopulariteminabasket")
+    //DataSink.writeCsv(mostPopularItemInABasket, "mostpopulariteminabasket") -> change array to str !
+    DataSink.writeCassandra(ifThen, "ifthen")
+    //DataSink.writeCsv(ifThen, "ifthen") -> change array to str!
   }
 
 
@@ -115,17 +132,22 @@ object Main {
       .withColumn("collect_list(Hierarchia Grupa 3 opis)" , uniqueProduct($"collect_list(Hierarchia Grupa 3 opis)"))
       .withColumnRenamed("collect_list(Hierarchia Grupa 3 opis)" ,  "Items")
 
-      .agg(collect_list($"Produkt ID"))
+
 
 
     val fpgrowth = new FPGrowth().setItemsCol("Items").setMinSupport(0.001).setMinConfidence(0)
     val model = fpgrowth.fit(basketItems)
 
     val mostPopularItemInABasket = model.freqItemsets
-    mostPopularItemInABasket.orderBy(desc("freq")).show(false)
+    .orderBy(desc("freq"))
+      .withColumn("id", monotonically_increasing_id)
+
 
     val ifThen = model.associationRules
-    ifThen.orderBy(desc("confidence"))
+    .orderBy(desc("confidence"))
+      .withColumn("id", monotonically_increasing_id)
+
+    (mostPopularItemInABasket, ifThen)
 
   }
 
@@ -151,6 +173,10 @@ object Main {
       .join(category, "Produkt ID")
       .drop("Hierarchia Grupa 0 opis,Hierarchia Grupa 1 opis,Hierarchia Grupa 2 opis".split(",") : _*)
       .limit(10)
+      .withColumnRenamed("Produkt ID", "product_id")
+      .withColumnRenamed("Ilosc", "amount")
+      .withColumnRenamed("Hierarchia Grupa 3 opis", "description")
+
   }
 
   def getBusiestHourOfDay(session: SparkSession): DataFrame={
@@ -166,8 +192,8 @@ object Main {
       .reduceGroups((x, y) => (x._1, x._2 + y._2))
       .map(row => row._1 -> row._2._2)
       .orderBy(desc("_2"))
-      .withColumnRenamed("_1" ,  "Godzina")
-      .withColumnRenamed("_2" ,  "Ilosc")
+      .withColumnRenamed("_1" ,  "hour")
+      .withColumnRenamed("_2" ,  "amount")
   }
 
   def top3PopularCategoryProduct(session: SparkSession) : DataFrame= {
@@ -197,6 +223,7 @@ object Main {
       .limit(10)
     val top3 = result.select("Kategoria").distinct()
     //result.show()
-    top3.limit(3)
+    top3.limit(3).withColumnRenamed("Kategoria", "category")
+
   }
 }

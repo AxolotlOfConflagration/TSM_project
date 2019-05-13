@@ -3,12 +3,12 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 object DataSink {
   val DEFAULT_PATH: String = "output_data/"
 
-  def writeCassandra(df: DataFrame)(): Unit = df
+  def writeCassandra(df: DataFrame, table: String)(): Unit = df
     .write
     .format("org.apache.spark.sql.cassandra")
     .mode("overwrite")
     .option("confirm.truncate", true)
-    .options(Map( "table" -> "rec", "keyspace" -> "tsm_keyspace"))
+    .options(Map( "table" -> table, "keyspace" -> "tsm_keyspace"))
     .save()
 
   def writeCsv(df: DataFrame, fileName: String)(): Unit = df
