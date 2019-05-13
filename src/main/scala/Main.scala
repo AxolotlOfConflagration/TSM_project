@@ -1,10 +1,8 @@
-import breeze.linalg.unique
 import org.apache.spark.ml.evaluation.RegressionEvaluator
 import org.apache.spark.ml.recommendation.ALS
-import org.apache.spark.sql.{DataFrame, Row, SparkSession}
+import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.ml.fpm.FPGrowth
-
 import scala.collection.mutable
 
 object Main {
@@ -19,18 +17,6 @@ object Main {
     spark.sparkContext.setLogLevel("OFF")
 
     import spark.implicits._
-//
-//            CASSANDRA TEST ------------------------------
-//            val output_data = spark.range(0, 3).select($"id".as("user_id"), (rand() * 40 + 20).as("ratings"))
-//            output_data.show()
-//
-//            DataSink.writeCassandra(output_data)
-//
-//            val input_data = DataLoader.readCassandra()
-//            input_data.show()
-//            ----------------------------------------------
-
-
 
     val data = DataLoader.readXslx()
 
@@ -78,15 +64,25 @@ object Main {
     val rmse = evaluator.evaluate(predictions)
     println(s"Root-mean-square error = $rmse")
 
-    val shopRecs = model.recommendForAllUsers(10)
-    val itemRecs = model.recommendForAllItems(10)
+    val shopRecs = model
+      .recommendForAllUsers(10)
+      .withColumn("recommendations", to_json($"recommendations"))
+      .withColumnRenamed("Sklep", "shop_id")
+
+    val itemRecs = model
+      .recommendForAllItems(10)
+      .withColumn("recommendations", to_json($"recommendations"))
+      .withColumnRenamed("Produkt ID", "product_id")
 
     println("We recommend for shops to stock up on these items:")
-    //shopRecs.show()
+    shopRecs.show()
     println("We recommend for warehouses to send items for those shops:")
     itemRecs.show()
 
-        DataSink.writeCsv(ratings, "ratings")
+    DataSink.writeCassandra(shopRecs, "shoprecs")
+    DataSink.writeCsv(shopRecs, "shoprecs")
+    DataSink.writeCassandra(itemRecs, "itemrecs")
+    DataSink.writeCsv(itemRecs, "itemrecs")
 
     println("Top 10 Popular Product")
     top10PopularProduct(spark).show()
@@ -101,7 +97,6 @@ object Main {
     println("MBA - If -> Then ")
     ifThen.show()
 
-
     DataSink.writeCassandra(top10PopularProduct(spark), "top10products")
     DataSink.writeCsv(top10PopularProduct(spark), "top10products")
     DataSink.writeCassandra(getBusiestHourOfDay(spark), "busiesthourofday")
@@ -109,9 +104,16 @@ object Main {
     DataSink.writeCassandra(top3PopularCategoryProduct(spark), "top3popularcategoryproduct")
     DataSink.writeCsv(top3PopularCategoryProduct(spark), "top3popularcategoryproduct")
     DataSink.writeCassandra(mostPopularItemInABasket, "mostpopulariteminabasket")
-    //DataSink.writeCsv(mostPopularItemInABasket, "mostpopulariteminabasket") -> change array to str !
+    DataSink.writeCsv({
+        mostPopularItemInABasket
+          .withColumn("items", concat_ws(",",col("items")))
+    }, "mostpopulariteminabasket")
     DataSink.writeCassandra(ifThen, "ifthen")
-    //DataSink.writeCsv(ifThen, "ifthen") -> change array to str!
+    DataSink.writeCsv({
+      ifThen
+        .withColumn("antecedent", concat_ws(",",col("antecedent")))
+        .withColumn("consequent", concat_ws(",",col("consequent")))
+    }, "ifthen")
   }
 
 
@@ -131,9 +133,6 @@ object Main {
       .agg(collect_list($"Hierarchia Grupa 3 opis"))
       .withColumn("collect_list(Hierarchia Grupa 3 opis)" , uniqueProduct($"collect_list(Hierarchia Grupa 3 opis)"))
       .withColumnRenamed("collect_list(Hierarchia Grupa 3 opis)" ,  "Items")
-
-
-
 
     val fpgrowth = new FPGrowth().setItemsCol("Items").setMinSupport(0.001).setMinConfidence(0)
     val model = fpgrowth.fit(basketItems)
@@ -222,7 +221,6 @@ object Main {
       .orderBy(desc("Ilosc"))
       .limit(10)
     val top3 = result.select("Kategoria").distinct()
-    //result.show()
     top3.limit(3).withColumnRenamed("Kategoria", "category")
 
   }
