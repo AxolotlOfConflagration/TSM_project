@@ -152,16 +152,16 @@ object Main {
     val fpgrowth = new FPGrowth().setItemsCol("Items").setMinSupport(0.001).setMinConfidence(0)
     val model = fpgrowth.fit(basketItems)
 
-    val mostPopularItemInABasket = model.freqItemsets
+    val mostFreqItemInABasket = model.freqItemsets
     .orderBy(desc("freq"))
       .withColumn("id", monotonically_increasing_id)
 
 
-    val ifThen = model.associationRules
+    val assoRules = model.associationRules
     .orderBy(desc("confidence"))
       .withColumn("id", monotonically_increasing_id)
 
-    (mostPopularItemInABasket, ifThen)
+    (mostFreqItemInABasket, assoRules)
 
   }
 
