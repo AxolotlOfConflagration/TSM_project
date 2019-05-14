@@ -116,17 +116,17 @@ object Main {
     DataSink.writeCsv(getBusiestHourOfDay(spark), "busiesthourofday")
     DataSink.writeCassandra(top3PopularCategoryProduct(spark), "top3popularcategoryproduct")
     DataSink.writeCsv(top3PopularCategoryProduct(spark), "top3popularcategoryproduct")
-    DataSink.writeCassandra(mostFreqItemInABasket, "mostfreqiteminabasket")
+    DataSink.writeCassandra(mostFreqItemInABasket, "mostpopulariteminabasket")
     DataSink.writeCsv({
         mostFreqItemInABasket
           .withColumn("items", concat_ws(",",col("items")))
-    }, "mostfreqiteminabasket")
-    DataSink.writeCassandra(ifThen, "assorules")
+    }, "mostpopulariteminabasket")
+    DataSink.writeCassandra(assoRules, "ifthen")
     DataSink.writeCsv({
       assoRules
         .withColumn("antecedent", concat_ws(",",col("antecedent")))
         .withColumn("consequent", concat_ws(",",col("consequent")))
-    }, "assorules")
+    }, "ifthen")
   }
 
 
