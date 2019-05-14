@@ -1,6 +1,6 @@
 CREATE KEYSPACE IF NOT EXISTS tsm_keyspace WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
-CREATE TABLE IF NOT EXISTS tsm_keyspace.shoprecs(shop_id int, recommendations text, PRIMARY KEY(shop_id));
-CREATE TABLE IF NOT EXISTS tsm_keyspace.itemrecs(product_id int, recommendations text, PRIMARY KEY(product_id));
+CREATE TABLE IF NOT EXISTS tsm_keyspace.shoprecs(shop_id int, products text, PRIMARY KEY(shop_id));
+CREATE TABLE IF NOT EXISTS tsm_keyspace.itemrecs(product_id int, shops text, PRIMARY KEY(product_id));
 CREATE TABLE IF NOT EXISTS tsm_keyspace.top10products(product_id varchar, amount int, description varchar, PRIMARY KEY(product_id));
 CREATE TABLE IF NOT EXISTS tsm_keyspace.busiestHourOfDay(hour varchar, amount int, PRIMARY KEY(hour));
 CREATE TABLE IF NOT EXISTS tsm_keyspace.top3PopularCategoryProduct(category varchar, PRIMARY KEY(category));

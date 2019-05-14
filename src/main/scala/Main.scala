@@ -64,15 +64,30 @@ object Main {
     val rmse = evaluator.evaluate(predictions)
     println(s"Root-mean-square error = $rmse")
 
+    val slice = udf((array : Seq[Int], from : Int, to : Int) => array.slice(from,to))
+
     val shopRecs = model
       .recommendForAllUsers(10)
-      .withColumn("recommendations", to_json($"recommendations"))
       .withColumnRenamed("Sklep", "shop_id")
+      .withColumn("products", to_json(col("recommendations")))
+      .drop(col("recommendations"))
+//      .select(col("shop_id"), col("recommendations.*"))
+//      .withColumn(
+//      "products", TupleUDFs.toTuple2[Int, Float].apply(col("recommendations.Produkt ID"), col("recommendations.rating"))
+//    )
+////      .withColumn("products", slice($"Produkt ID", lit(0), lit(10)))
+//      .drop(col("Produkt ID"))
+//      .withColumn("products", concat_ws(",",col("recommendations")))
 
     val itemRecs = model
       .recommendForAllItems(10)
-      .withColumn("recommendations", to_json($"recommendations"))
       .withColumnRenamed("Produkt ID", "product_id")
+      .withColumn("shops", to_json(col("recommendations")))
+      .drop(col("recommendations"))
+//      .select(col("product_id"), col("recommendations.Sklep"))
+////      .withColumn("shops", slice($"Sklep", lit(0), lit(10)))
+//      .drop(col("Sklep"))
+//      .withColumn("shops", concat_ws(",",col("shops")))
 
     println("We recommend for shops to stock up on these items:")
     shopRecs.show()
@@ -80,9 +95,7 @@ object Main {
     itemRecs.show()
 
     DataSink.writeCassandra(shopRecs, "shoprecs")
-    DataSink.writeCsv(shopRecs, "shoprecs")
     DataSink.writeCassandra(itemRecs, "itemrecs")
-    DataSink.writeCsv(itemRecs, "itemrecs")
 
     println("Top 10 Popular Product")
     top10PopularProduct(spark).show()
