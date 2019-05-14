@@ -141,7 +141,9 @@ object Main {
 
     val basketItems = receipts
       .join(category, "Produkt ID")
-      .drop("Sklep, Paragon godzina, Promocja A, Promocja B, Wartość netto sprzedaży z paragonu, Rok i miesiac, Hierarchia Grupa 0 opis, Hierarchia Grupa 1 opis, Hierarchia Grupa 2 opis".split(", ") : _*)
+      .drop("Sklep, Paragon godzina, Promocja A, Promocja B, 
+      Wartość netto sprzedaży z paragonu, Rok i miesiac, 
+      Hierarchia Grupa 0 opis, Hierarchia Grupa 1 opis, Hierarchia Grupa 2 opis".split(", ") : _*)
       .groupBy("Paragon numer")
       .agg(collect_list($"Hierarchia Grupa 3 opis"))
       .withColumn("collect_list(Hierarchia Grupa 3 opis)" , uniqueProduct($"collect_list(Hierarchia Grupa 3 opis)"))
