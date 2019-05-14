@@ -104,11 +104,11 @@ object Main {
     println("Top 3 Popular Categpry Product")
     top3PopularCategoryProduct(spark).show()
 
-    val ( mostPopularItemInABasket, ifThen) = marketBasketAnalysis(spark)
-    println("Most Popular Item In a Basket")
-    mostPopularItemInABasket.show()
-    println("MBA - If -> Then ")
-    ifThen.show()
+    val (mostFreqItemInABasket, assoRules) = marketBasketAnalysis(spark)
+    println("Most Freq Item In a Basket")
+    mostFreqItemInABasket.show()
+    println("Association Rules")
+    assoRules.show()
 
     DataSink.writeCassandra(top10PopularProduct(spark), "top10products")
     DataSink.writeCsv(top10PopularProduct(spark), "top10products")
@@ -116,17 +116,17 @@ object Main {
     DataSink.writeCsv(getBusiestHourOfDay(spark), "busiesthourofday")
     DataSink.writeCassandra(top3PopularCategoryProduct(spark), "top3popularcategoryproduct")
     DataSink.writeCsv(top3PopularCategoryProduct(spark), "top3popularcategoryproduct")
-    DataSink.writeCassandra(mostPopularItemInABasket, "mostpopulariteminabasket")
+    DataSink.writeCassandra(mostFreqItemInABasket, "mostfreqiteminabasket")
     DataSink.writeCsv({
-        mostPopularItemInABasket
+        mostFreqItemInABasket
           .withColumn("items", concat_ws(",",col("items")))
-    }, "mostpopulariteminabasket")
-    DataSink.writeCassandra(ifThen, "ifthen")
+    }, "mostfreqiteminabasket")
+    DataSink.writeCassandra(ifThen, "assorules")
     DataSink.writeCsv({
-      ifThen
+      assoRules
         .withColumn("antecedent", concat_ws(",",col("antecedent")))
         .withColumn("consequent", concat_ws(",",col("consequent")))
-    }, "ifthen")
+    }, "assorules")
   }
 
 
