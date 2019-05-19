@@ -1,5 +1,5 @@
 target/
-
+output_data/
 # Created by https://www.gitignore.io/api/linux,scala,intellij,intellij+all
 # Edit at https://www.gitignore.io/?templates=linux,scala,intellij,intellij+all
 

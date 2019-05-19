@@ -6,8 +6,9 @@ import org.apache.spark.ml.fpm.FPGrowth
 import scala.collection.mutable
 
 object Main {
+  val verbose = false
+
   def main(args: Array[String]): Unit = {
-    val verbose = false
 
     implicit val spark: SparkSession = SparkSession
       .builder()
@@ -16,9 +17,51 @@ object Main {
       .getOrCreate()
     spark.sparkContext.setLogLevel("OFF")
 
-    import spark.implicits._
-
     val data = DataLoader.readXslx()
+    val (shopRecs, itemRecs) = als(data)
+    saveRecommendation(shopRecs, itemRecs)
+
+    println("Top 10 Popular Product")
+    top10PopularProduct().show()
+    println("Busiest Hour of Day")
+    getBusiestHourOfDay().show(10)
+    println("Top 3 Popular Categpry Product")
+    top3PopularCategoryProduct().show()
+
+    val (mostFreqItemInABasket, assoRules) = marketBasketAnalysis()
+    println("Most Freq Item In a Basket")
+    mostFreqItemInABasket.show()
+    println("Association Rules")
+    assoRules.show()
+
+    DataSink.writeCassandra(top10PopularProduct(), "top10products")
+    DataSink.writeCsv(top10PopularProduct(), "top10products")
+    DataSink.writeCassandra(getBusiestHourOfDay(), "busiesthourofday")
+    DataSink.writeCsv(getBusiestHourOfDay(), "busiesthourofday")
+    DataSink.writeCassandra(top3PopularCategoryProduct(), "top3popularcategoryproduct")
+    DataSink.writeCsv(top3PopularCategoryProduct(), "top3popularcategoryproduct")
+    DataSink.writeCassandra(mostFreqItemInABasket, "mostpopulariteminabasket")
+    DataSink.writeCsv({
+      mostFreqItemInABasket
+        .withColumn("items", concat_ws(",", col("items")))
+    }, "mostpopulariteminabasket")
+
+    DataSink.writeCassandra(assoRules, "ifthen")
+    DataSink.writeCsv({
+      assoRules
+        .withColumn("antecedent", concat_ws(",", col("antecedent")))
+        .withColumn("consequent", concat_ws(",", col("consequent")))
+    }, "ifthen")
+  }
+
+  /**
+    * Recommendation using ALS algorithm
+    *
+    * @param data Receipt data that is used for recommendation
+    * @return Tuple (recommendation for shops, recommendation for items)
+    */
+  def als(data: DataFrame)(implicit spark: SparkSession): (DataFrame, DataFrame) = {
+    import spark.implicits._
 
     val storeItemCount = data
       .groupBy($"Sklep", $"Produkt ID")
@@ -26,14 +69,14 @@ object Main {
       .na.drop()
       .orderBy(desc("count"))
 
-    if(verbose) storeItemCount.show()
+    if (verbose) storeItemCount.show()
 
     val storeTotalItemsSold =
       storeItemCount
         .groupBy($"Sklep")
         .sum("count")
 
-    if(verbose) storeTotalItemsSold.show()
+    if (verbose) storeTotalItemsSold.show()
 
     val ratings = storeItemCount
       .join(storeTotalItemsSold, "Sklep")
@@ -43,7 +86,7 @@ object Main {
         $"count" / $"sum(count)" as "rating")
       .orderBy(desc("rating"))
 
-    if(verbose) ratings.show()
+    if (verbose) ratings.show()
 
     val Array(traning, test) = ratings.randomSplit(Array(0.85, 0.15), 42)
 
@@ -64,31 +107,22 @@ object Main {
     val rmse = evaluator.evaluate(predictions)
     println(s"Root-mean-square error = $rmse")
 
-    val slice = udf((array : Seq[Int], from : Int, to : Int) => array.slice(from,to))
-
     val shopRecs = model
       .recommendForAllUsers(10)
       .withColumnRenamed("Sklep", "shop_id")
       .withColumn("products", to_json(col("recommendations")))
       .drop(col("recommendations"))
-//      .select(col("shop_id"), col("recommendations.*"))
-//      .withColumn(
-//      "products", TupleUDFs.toTuple2[Int, Float].apply(col("recommendations.Produkt ID"), col("recommendations.rating"))
-//    )
-////      .withColumn("products", slice($"Produkt ID", lit(0), lit(10)))
-//      .drop(col("Produkt ID"))
-//      .withColumn("products", concat_ws(",",col("recommendations")))
 
     val itemRecs = model
       .recommendForAllItems(10)
       .withColumnRenamed("Produkt ID", "product_id")
       .withColumn("shops", to_json(col("recommendations")))
       .drop(col("recommendations"))
-//      .select(col("product_id"), col("recommendations.Sklep"))
-////      .withColumn("shops", slice($"Sklep", lit(0), lit(10)))
-//      .drop(col("Sklep"))
-//      .withColumn("shops", concat_ws(",",col("shops")))
 
+    (shopRecs, itemRecs)
+  }
+
+  def saveRecommendation(shopRecs: DataFrame, itemRecs: DataFrame)(implicit spark: SparkSession): Unit = {
     println("We recommend for shops to stock up on these items:")
     shopRecs.show()
     println("We recommend for warehouses to send items for those shops:")
@@ -96,42 +130,9 @@ object Main {
 
     DataSink.writeCassandra(shopRecs, "shoprecs")
     DataSink.writeCassandra(itemRecs, "itemrecs")
-
-    println("Top 10 Popular Product")
-    top10PopularProduct(spark).show()
-    println("Busiest Hour of Day")
-    getBusiestHourOfDay(spark).show(10)
-    println("Top 3 Popular Categpry Product")
-    top3PopularCategoryProduct(spark).show()
-
-    val (mostFreqItemInABasket, assoRules) = marketBasketAnalysis(spark)
-    println("Most Freq Item In a Basket")
-    mostFreqItemInABasket.show()
-    println("Association Rules")
-    assoRules.show()
-
-    DataSink.writeCassandra(top10PopularProduct(spark), "top10products")
-    DataSink.writeCsv(top10PopularProduct(spark), "top10products")
-    DataSink.writeCassandra(getBusiestHourOfDay(spark), "busiesthourofday")
-    DataSink.writeCsv(getBusiestHourOfDay(spark), "busiesthourofday")
-    DataSink.writeCassandra(top3PopularCategoryProduct(spark), "top3popularcategoryproduct")
-    DataSink.writeCsv(top3PopularCategoryProduct(spark), "top3popularcategoryproduct")
-    DataSink.writeCassandra(mostFreqItemInABasket, "mostpopulariteminabasket")
-    DataSink.writeCsv({
-        mostFreqItemInABasket
-          .withColumn("items", concat_ws(",",col("items")))
-    }, "mostpopulariteminabasket")
-    DataSink.writeCassandra(assoRules, "ifthen")
-    DataSink.writeCsv({
-      assoRules
-        .withColumn("antecedent", concat_ws(",",col("antecedent")))
-        .withColumn("consequent", concat_ws(",",col("consequent")))
-    }, "ifthen")
   }
 
-
-
-  def marketBasketAnalysis(session: SparkSession) ={
+  def marketBasketAnalysis()(implicit session: SparkSession): (DataFrame, DataFrame) = {
     import session.sqlContext.implicits._
     val receipts = DataLoader.readCsv()(session)
     val category = DataLoader.readCsv("data/dane_kategoryzacja.csv")(session)
@@ -141,31 +142,31 @@ object Main {
 
     val basketItems = receipts
       .join(category, "Produkt ID")
-      .drop("Sklep, Paragon godzina, Promocja A, Promocja B, 
+      .drop("""Sklep, Paragon godzina, Promocja A, Promocja B,
       Wartość netto sprzedaży z paragonu, Rok i miesiac, 
-      Hierarchia Grupa 0 opis, Hierarchia Grupa 1 opis, Hierarchia Grupa 2 opis".split(", ") : _*)
+      Hierarchia Grupa 0 opis, Hierarchia Grupa 1 opis, Hierarchia Grupa 2 opis""".split(", "): _*)
       .groupBy("Paragon numer")
       .agg(collect_list($"Hierarchia Grupa 3 opis"))
-      .withColumn("collect_list(Hierarchia Grupa 3 opis)" , uniqueProduct($"collect_list(Hierarchia Grupa 3 opis)"))
-      .withColumnRenamed("collect_list(Hierarchia Grupa 3 opis)" ,  "Items")
+      .withColumn("collect_list(Hierarchia Grupa 3 opis)", uniqueProduct($"collect_list(Hierarchia Grupa 3 opis)"))
+      .withColumnRenamed("collect_list(Hierarchia Grupa 3 opis)", "Items")
 
     val fpgrowth = new FPGrowth().setItemsCol("Items").setMinSupport(0.001).setMinConfidence(0)
     val model = fpgrowth.fit(basketItems)
 
     val mostFreqItemInABasket = model.freqItemsets
-    .orderBy(desc("freq"))
+      .orderBy(desc("freq"))
       .withColumn("id", monotonically_increasing_id)
 
 
     val assoRules = model.associationRules
-    .orderBy(desc("confidence"))
+      .orderBy(desc("confidence"))
       .withColumn("id", monotonically_increasing_id)
 
     (mostFreqItemInABasket, assoRules)
 
   }
 
-  def top10PopularProduct(session: SparkSession) :DataFrame={
+  def top10PopularProduct()(implicit session: SparkSession): DataFrame = {
 
     val receipts = DataLoader.readCsv()(session)
 
@@ -175,17 +176,17 @@ object Main {
 
     receipts
       .join(category, "Produkt ID")
-      .drop("Hierarchia Grupa 0 opis,Hierarchia Grupa 1 opis,Hierarchia Grupa 2 opis".split(",") : _*)
+      .drop("Hierarchia Grupa 0 opis,Hierarchia Grupa 1 opis,Hierarchia Grupa 2 opis".split(","): _*)
       //      .filter(_.getAs[String]("Sklep") == "Sklep13")
       .map(row => row.getAs[String]("Produkt ID") -> 1)
       .groupByKey(_._1)
       .reduceGroups((x, y) => (x._1, x._2 + y._2))
       .map(row => row._1 -> row._2._2)
       .orderBy(desc("_2"))
-      .withColumnRenamed("_1" ,  "Produkt ID")
-      .withColumnRenamed("_2" ,  "Ilosc")
+      .withColumnRenamed("_1", "Produkt ID")
+      .withColumnRenamed("_2", "Ilosc")
       .join(category, "Produkt ID")
-      .drop("Hierarchia Grupa 0 opis,Hierarchia Grupa 1 opis,Hierarchia Grupa 2 opis".split(",") : _*)
+      .drop("Hierarchia Grupa 0 opis,Hierarchia Grupa 1 opis,Hierarchia Grupa 2 opis".split(","): _*)
       .limit(10)
       .withColumnRenamed("Produkt ID", "product_id")
       .withColumnRenamed("Ilosc", "amount")
@@ -193,9 +194,9 @@ object Main {
 
   }
 
-  def getBusiestHourOfDay(session: SparkSession): DataFrame={
+  def getBusiestHourOfDay()(implicit session: SparkSession): DataFrame = {
 
-    val receipts = DataLoader.readCsv()(session)//.na.drop()
+    val receipts = DataLoader.readCsv()(session) //.na.drop()
 
     import session.sqlContext.implicits._
 
@@ -206,11 +207,11 @@ object Main {
       .reduceGroups((x, y) => (x._1, x._2 + y._2))
       .map(row => row._1 -> row._2._2)
       .orderBy(desc("_2"))
-      .withColumnRenamed("_1" ,  "hour")
-      .withColumnRenamed("_2" ,  "amount")
+      .withColumnRenamed("_1", "hour")
+      .withColumnRenamed("_2", "amount")
   }
 
-  def top3PopularCategoryProduct(session: SparkSession) : DataFrame= {
+  def top3PopularCategoryProduct()(implicit session: SparkSession): DataFrame = {
 
     val receipts = DataLoader.readCsv()(session)
 

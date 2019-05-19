@@ -1,6 +1,4 @@
 import org.apache.spark.sql.{DataFrame, SparkSession}
-import com.datastax.spark.connector._
-import org.apache.spark.sql.cassandra._
 
 object DataLoader {
   val DEFAULT_PATH: String = "data/dane_paragony."
