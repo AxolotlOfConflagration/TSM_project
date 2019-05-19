@@ -4,7 +4,7 @@ import org.apache.spark.sql.{DataFrame, SparkSession}
 
 object DataSink {
   val DEFAULT_PATH: String = "output_data/"
-  val useCassandra = false
+  val useCassandra = true
 
   def writeCassandra(df: DataFrame, table: String): Unit = if(useCassandra) {
     df.write
