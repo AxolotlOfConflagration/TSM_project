@@ -3,7 +3,11 @@ import org.apache.spark.ml.recommendation.ALS
 import org.apache.spark.sql.{DataFrame, SparkSession}
 import org.apache.spark.sql.functions._
 import org.apache.spark.ml.fpm.FPGrowth
+import org.json4s.DefaultFormats
+import org.json4s.JsonAST.{JArray, JDouble, JField, JInt, JObject, JString, JValue}
+
 import scala.collection.mutable
+import org.json4s.jackson.JsonMethods._
 
 object Main {
   val verbose = false
@@ -12,7 +16,7 @@ object Main {
 
     implicit val spark: SparkSession = SparkSession
       .builder()
-      .master("local")
+      .master("local[*]")
       .appName("TSM_project")
       .getOrCreate()
     spark.sparkContext.setLogLevel("OFF")
@@ -21,37 +25,37 @@ object Main {
     val (shopRecs, itemRecs) = als(data)
     saveRecommendation(shopRecs, itemRecs)
 
-    println("Top 10 Popular Product")
-    top10PopularProduct().show()
-    println("Busiest Hour of Day")
-    getBusiestHourOfDay().show(10)
-    println("Top 3 Popular Categpry Product")
-    top3PopularCategoryProduct().show()
-
-    val (mostFreqItemInABasket, assoRules) = marketBasketAnalysis()
-    println("Most Freq Item In a Basket")
-    mostFreqItemInABasket.show()
-    println("Association Rules")
-    assoRules.show()
-
-    DataSink.writeCassandra(top10PopularProduct(), "top10products")
-    DataSink.writeCsv(top10PopularProduct(), "top10products")
-    DataSink.writeCassandra(getBusiestHourOfDay(), "busiesthourofday")
-    DataSink.writeCsv(getBusiestHourOfDay(), "busiesthourofday")
-    DataSink.writeCassandra(top3PopularCategoryProduct(), "top3popularcategoryproduct")
-    DataSink.writeCsv(top3PopularCategoryProduct(), "top3popularcategoryproduct")
-    DataSink.writeCassandra(mostFreqItemInABasket, "mostpopulariteminabasket")
-    DataSink.writeCsv({
-      mostFreqItemInABasket
-        .withColumn("items", concat_ws(",", col("items")))
-    }, "mostpopulariteminabasket")
-
-    DataSink.writeCassandra(assoRules, "ifthen")
-    DataSink.writeCsv({
-      assoRules
-        .withColumn("antecedent", concat_ws(",", col("antecedent")))
-        .withColumn("consequent", concat_ws(",", col("consequent")))
-    }, "ifthen")
+//    println("Top 10 Popular Product")
+//    top10PopularProduct().show()
+//    println("Busiest Hour of Day")
+//    getBusiestHourOfDay().show(10)
+//    println("Top 3 Popular Categpry Product")
+//    top3PopularCategoryProduct().show()
+//
+//    val (mostFreqItemInABasket, assoRules) = marketBasketAnalysis()
+//    println("Most Freq Item In a Basket")
+//    mostFreqItemInABasket.show()
+//    println("Association Rules")
+//    assoRules.show()
+//
+//    DataSink.writeCassandra(top10PopularProduct(), "top10products")
+//    DataSink.writeCsv(top10PopularProduct(), "top10products")
+//    DataSink.writeCassandra(getBusiestHourOfDay(), "busiesthourofday")
+//    DataSink.writeCsv(getBusiestHourOfDay(), "busiesthourofday")
+//    DataSink.writeCassandra(top3PopularCategoryProduct(), "top3popularcategoryproduct")
+//    DataSink.writeCsv(top3PopularCategoryProduct(), "top3popularcategoryproduct")
+//    DataSink.writeCassandra(mostFreqItemInABasket, "mostpopulariteminabasket")
+//    DataSink.writeCsv({
+//      mostFreqItemInABasket
+//        .withColumn("items", concat_ws(",", col("items")))
+//    }, "mostpopulariteminabasket")
+//
+//    DataSink.writeCassandra(assoRules, "ifthen")
+//    DataSink.writeCsv({
+//      assoRules
+//        .withColumn("antecedent", concat_ws(",", col("antecedent")))
+//        .withColumn("consequent", concat_ws(",", col("consequent")))
+//    }, "ifthen")
   }
 
   /**
@@ -123,6 +127,8 @@ object Main {
   }
 
   def saveRecommendation(shopRecs: DataFrame, itemRecs: DataFrame)(implicit spark: SparkSession): Unit = {
+    import spark.implicits._
+
     println("We recommend for shops to stock up on these items:")
     shopRecs.show()
     println("We recommend for warehouses to send items for those shops:")
@@ -130,6 +136,21 @@ object Main {
 
     DataSink.writeCassandra(shopRecs, "shoprecs")
     DataSink.writeCassandra(itemRecs, "itemrecs")
+
+    implicit val formats = DefaultFormats
+
+    val shops = shopRecs.select("shop_id").rdd.map(_(0).toString.toInt).collect()
+    shops.foreach(shop => {
+      shopRecs
+        .filter($"shop_id" === shop)
+        .select("products")
+        .rdd.map(_(0).toString)
+        .collect()
+        .map(str => parse(str))
+        .map(json => json.extract[List[Map[String, Any]]])
+        .map(json => json.map(elem => elem("Produkt ID").asInstanceOf[BigInt].toLong -> elem("rating").asInstanceOf[Double]))
+        .foreach(record => DataSink.writeCsv(record, "Product_ID" :: "Rating" :: Nil, s"Shop_${shop}_recs"))
+    })
   }
 
   def marketBasketAnalysis()(implicit session: SparkSession): (DataFrame, DataFrame) = {

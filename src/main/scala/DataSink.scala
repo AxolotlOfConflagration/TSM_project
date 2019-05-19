@@ -1,3 +1,5 @@
+import java.io.FileWriter
+
 import org.apache.spark.sql.{DataFrame, SparkSession}
 
 object DataSink {
@@ -20,4 +22,14 @@ object DataSink {
     .mode("overwrite")
     .option("header", "true")
     .save(DEFAULT_PATH+fileName+".csv")
+
+  def writeCsv(data: List[(Long, Double)], names: List[String], fileName: String) = {
+    val writer = new FileWriter(DEFAULT_PATH + fileName + ".csv")
+    writer.append(names.mkString(",") + "\n")
+    data.foreach(record => {
+      writer.append(s"${record._1},${record._2}\n")
+    })
+
+    writer.close()
+  }
 }
